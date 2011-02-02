@@ -1,0 +1,35 @@
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/repos/!svn/ver/1379/portaudio/trunk/build/dev-cpp
+END
+Makefile-static
+K 25
+svn:wc:ra_dav:version-url
+V 66
+/repos/!svn/ver/1379/portaudio/trunk/build/dev-cpp/Makefile-static
+END
+Makefile-dll
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/repos/!svn/ver/1379/portaudio/trunk/build/dev-cpp/Makefile-dll
+END
+portaudio-static.dev
+K 25
+svn:wc:ra_dav:version-url
+V 71
+/repos/!svn/ver/1379/portaudio/trunk/build/dev-cpp/portaudio-static.dev
+END
+readme.txt
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/repos/!svn/ver/1379/portaudio/trunk/build/dev-cpp/readme.txt
+END
+portaudio-dll.dev
+K 25
+svn:wc:ra_dav:version-url
+V 68
+/repos/!svn/ver/1379/portaudio/trunk/build/dev-cpp/portaudio-dll.dev
+END

@@ -1,0 +1,37 @@
+10
+
+dir
+1585
+https://www.portaudio.com/repos/portaudio/trunk/build
+https://www.portaudio.com/repos
+
+
+
+2010-07-23T10:04:03.916117Z
+1529
+dmitrykos
+has-props
+
+
+
+
+
+
+
+
+
+
+
+
+
+0f58301d-fd10-0410-b4af-bbb618454e57
+
+scons
+dir
+
+msvc
+dir
+
+dev-cpp
+dir
+

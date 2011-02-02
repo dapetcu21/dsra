@@ -1,0 +1,113 @@
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/repos/!svn/ver/1585/portaudio/trunk
+END
+configure
+K 25
+svn:wc:ra_dav:version-url
+V 46
+/repos/!svn/ver/1481/portaudio/trunk/configure
+END
+Makefile.in
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/repos/!svn/ver/1550/portaudio/trunk/Makefile.in
+END
+Doxyfile
+K 25
+svn:wc:ra_dav:version-url
+V 45
+/repos/!svn/ver/1554/portaudio/trunk/Doxyfile
+END
+configure.in
+K 25
+svn:wc:ra_dav:version-url
+V 49
+/repos/!svn/ver/1548/portaudio/trunk/configure.in
+END
+depcomp
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/repos/!svn/ver/1379/portaudio/trunk/depcomp
+END
+fixdir.bat
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/repos/!svn/ver/1379/portaudio/trunk/fixdir.bat
+END
+config.guess
+K 25
+svn:wc:ra_dav:version-url
+V 49
+/repos/!svn/ver/1379/portaudio/trunk/config.guess
+END
+fixfile.bat
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/repos/!svn/ver/1379/portaudio/trunk/fixfile.bat
+END
+config.sub
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/repos/!svn/ver/1379/portaudio/trunk/config.sub
+END
+ltmain.sh
+K 25
+svn:wc:ra_dav:version-url
+V 46
+/repos/!svn/ver/1379/portaudio/trunk/ltmain.sh
+END
+LICENSE.txt
+K 25
+svn:wc:ra_dav:version-url
+V 48
+/repos/!svn/ver/1379/portaudio/trunk/LICENSE.txt
+END
+SConstruct
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/repos/!svn/ver/1379/portaudio/trunk/SConstruct
+END
+portaudio-2.0.pc.in
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/repos/!svn/ver/1379/portaudio/trunk/portaudio-2.0.pc.in
+END
+missing
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/repos/!svn/ver/1379/portaudio/trunk/missing
+END
+index.html
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/repos/!svn/ver/1379/portaudio/trunk/index.html
+END
+README.txt
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/repos/!svn/ver/1379/portaudio/trunk/README.txt
+END
+aclocal.m4
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/repos/!svn/ver/1379/portaudio/trunk/aclocal.m4
+END
+install-sh
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/repos/!svn/ver/1379/portaudio/trunk/install-sh
+END

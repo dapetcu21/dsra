@@ -1,0 +1,59 @@
+K 25
+svn:wc:ra_dav:version-url
+V 44
+/repos/!svn/ver/1582/portaudio/trunk/include
+END
+pa_asio.h
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/repos/!svn/ver/1575/portaudio/trunk/include/pa_asio.h
+END
+pa_linux_alsa.h
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/repos/!svn/ver/1414/portaudio/trunk/include/pa_linux_alsa.h
+END
+pa_win_wasapi.h
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/repos/!svn/ver/1535/portaudio/trunk/include/pa_win_wasapi.h
+END
+pa_win_wmme.h
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/repos/!svn/ver/1405/portaudio/trunk/include/pa_win_wmme.h
+END
+pa_win_ds.h
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/repos/!svn/ver/1379/portaudio/trunk/include/pa_win_ds.h
+END
+portaudio.h
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/repos/!svn/ver/1582/portaudio/trunk/include/portaudio.h
+END
+pa_jack.h
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/repos/!svn/ver/1379/portaudio/trunk/include/pa_jack.h
+END
+pa_mac_core.h
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/repos/!svn/ver/1379/portaudio/trunk/include/pa_mac_core.h
+END
+pa_win_waveformat.h
+K 25
+svn:wc:ra_dav:version-url
+V 64
+/repos/!svn/ver/1401/portaudio/trunk/include/pa_win_waveformat.h
+END

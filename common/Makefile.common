@@ -1,0 +1,13 @@
+UNAME= $(shell uname)
+ifeq ($(UNAME),Darwin)
+PALDFLAGS= -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework CoreServices
+LIBPORTAUDIO=../portaudio/lib/.libs/libportaudio.a
+else
+PALDFLAGS= -lasound
+LIBPORTAUDIO=../portaudio/lib/.libs/libportaudio.so
+endif
+
+
+$(LIBPORTAUDIO):
+	cd ../portaudio; ./configure && make
+

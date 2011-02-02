@@ -1,0 +1,33 @@
+DSRA - Dead Simple Remote Audio
+
+LICENCE
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>
+
+Author: Marius Petcu (da_petcu21)
+
+INSTALLING
+
+just "make", then "sudo make install" if you want to
+you must have libasound installed (ALSA libraries) on linux. check out the package management system on your distro
+if you want only the client or the server, you can use the makefiles in the corresponding directories
+you might want to make an init script for the server
+
+USAGE
+
+dsra --help
+dsra-server --help 
+
+:P
+
