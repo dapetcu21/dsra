@@ -16,8 +16,8 @@
 #include <sys/socket.h>
 #include "../common/dsra.h"
 
-#define MAXBUFFER 60
-#define DESIREDBUFFER 30
+#define MAXBUFFER 120
+#define DESIREDBUFFER 60
 
 static int get_data( const void *inputBuffer, void *outputBuffer,
 						  unsigned long framesPerBuffer,
@@ -43,6 +43,9 @@ static int get_data( const void *inputBuffer, void *outputBuffer,
 	{
 		pthread_mutex_unlock(&(ud->mutex));
 		memset(outputBuffer,0,size);
+//      static int nr = 0;
+//      printf("empty pack no %d\n",nr);
+//      nr++;
 	}
 	if (ud->verbose)
 	{
