@@ -49,6 +49,16 @@ static int get_data( const void *inputBuffer, void *outputBuffer,
 			empty = 0;
 			break;
 		}
+
+    static int eframes = 0;
+    if (empty)
+    {
+        if (eframes<300)
+        {
+            eframes++;
+            empty = 0;
+        }
+    } else  eframes = 0;
 	
 	if (!empty)
 		if (write_data(ud->fd,(uint8_t*)inputBuffer,size)!=0)
