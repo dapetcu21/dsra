@@ -68,9 +68,7 @@ static int get_data( const void *inputBuffer, void *outputBuffer,
 	
 	buffer = queue_buffers[queue_pointer];
 	sz = queue_sizes[queue_pointer];
-	if (!buffer)
-		reset_queue_pointer = 1;
-	else 
+	if (buffer) 
 		queue_buffers[queue_pointer] = NULL;
 	pthread_mutex_unlock(&queue_mutex);
 	
