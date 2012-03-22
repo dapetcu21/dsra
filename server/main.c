@@ -14,10 +14,29 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include "../common/dsra.h"
 
-#define MAXBUFFER 120
-#define DESIREDBUFFER 60
+#define MAX_BUFFER_SIZE 2048
+
+struct params prm;
+int verbose = 0;
+int keep_going = 0;
+int keep_going_global = 1;
+PaDeviceIndex dev;
+pthread_mutex_t keep_going_mutex,queue_mutex;
+uint8_t queue_pointer,queue_last_added;
+int reset_queue_pointer;
+uint8_t * queue_buffers[256] = {};
+size_t queue_sizes[256] = {};
+struct timeval last_data_packet_time;
+
+struct udata
+{
+	int bpFrame;
+	int verbose;
+	struct params * prm;
+};
 
 static int get_data( const void *inputBuffer, void *outputBuffer,
 						  unsigned long framesPerBuffer,
@@ -27,26 +46,44 @@ static int get_data( const void *inputBuffer, void *outputBuffer,
 {
 	struct udata * ud = ((struct udata*)userData);
     size_t size = framesPerBuffer*(ud->bpFrame)*(ud->prm->channels); 
-	pthread_mutex_lock(&(ud->mutex));
-	if (ud->first)
+
+	uint8_t * buffer = NULL;
+	size_t sz = 0;
+	pthread_mutex_lock(&queue_mutex);
+	if (reset_queue_pointer)
 	{
-		struct list_el * nw = ud->first;
-		ud->first = nw->next;
-		if (ud->first == NULL)
-			ud->last = NULL;
-		ud->buflen--;
-		pthread_mutex_unlock(&(ud->mutex));
-		memcpy(outputBuffer,nw->buffer,size);
-		free(nw->buffer);
-		free(nw);
-	} else 
-	{
-		pthread_mutex_unlock(&(ud->mutex));
-		memset(outputBuffer,0,size);
-//      static int nr = 0;
-//      printf("empty pack no %d\n",nr);
-//      nr++;
+		queue_pointer = queue_last_added;
+		reset_queue_pointer = 0;
 	}
+	else
+		queue_pointer++;
+	
+	uint8_t last = queue_pointer;
+	while(!queue_buffers[queue_pointer])
+	{
+		queue_pointer++;
+		if (last==queue_pointer)
+			break;
+	}
+	
+	buffer = queue_buffers[queue_pointer];
+	sz = queue_sizes[queue_pointer];
+	if (!buffer)
+		reset_queue_pointer = 1;
+	else 
+		queue_buffers[queue_pointer] = NULL;
+	pthread_mutex_unlock(&queue_mutex);
+	
+	if (size<sz)
+		sz = size;
+	if (buffer)
+		memcpy(outputBuffer,buffer+2,sz);
+	else 
+	{
+		memset(outputBuffer,0,size);
+		return 0;
+	}
+
 	if (ud->verbose)
 	{
 		float nr = 0;
@@ -72,6 +109,27 @@ static int get_data( const void *inputBuffer, void *outputBuffer,
 	}
     return 0;
 }
+
+int queue_data(uint8_t * buffer, size_t size)
+{
+	if (buffer[0] != DSRA_SIG_DATA) return 1;
+	gettimeofday(&last_data_packet_time,NULL);
+	uint8_t timestamp = buffer[1];
+	pthread_mutex_lock(&queue_mutex);
+	if (reset_queue_pointer || timestamp>=queue_pointer)
+	{
+		if (queue_buffers[timestamp])
+			free(queue_buffers[timestamp]);
+		queue_buffers[timestamp] = buffer;
+		queue_sizes[timestamp] = size;
+		queue_last_added = timestamp;
+		pthread_mutex_unlock(&queue_mutex);
+		return 0;
+	}
+	pthread_mutex_unlock(&queue_mutex);
+	return 1;
+}
+
 
 int init_audio()
 {
@@ -141,84 +199,27 @@ PaDeviceIndex device_for_string(const char * dev)
 	return nr;
 }
 
-int read_data(int fd, void * buf, size_t size)
-{
-	while (1)
-	{
-		int err = read(fd,buf,size);
-		if ((err==-1)&&(errno!=EAGAIN)&&(errno!=EINTR))
-			return -1;
-		if (err == (int)size)
-			return size;
-		if (err==0)
-			return -1;
-	}
-}
-
-void network_thread(struct udata * ud)
-{
-    size_t size = (ud->prm->framesPerBuffer)*(ud->bpFrame)*(ud->prm->channels); 
-	while (ud->still_running)
-	{
-		struct list_el * nw = (struct list_el *)malloc(sizeof(struct list_el));
-		nw->buffer = (uint8_t*)malloc(size);
-		if (read_data(ud->fd,nw->buffer,size)<0)
-		{
-			ud->still_running = 0;
-			continue;
-		}
-		pthread_mutex_lock(&(ud->mutex));
-		nw->next = NULL;
-		if (ud->last)
-		{
-			ud->last->next = nw;
-			ud->last = nw;
-		} else {
-			ud->first = ud->last = nw;
-		}
-		ud->buflen++;
-		if (ud->buflen > MAXBUFFER)
-		{
-			while (ud->buflen > DESIREDBUFFER)
-			{
-				ud->buflen--;
-				struct list_el * tmp = ud->first;
-				ud->first = ud->first->next;
-				free(tmp->buffer);
-				free(tmp);
-			}
-		}
-		pthread_mutex_unlock(&(ud->mutex));
-	}
-	pthread_mutex_lock(&(ud->mutex));
-	while (ud->first)
-	{
-		struct list_el * nw = ud->first;
-		ud->first = ud->first->next;
-		free(nw->buffer);
-		free(nw);
-	}
-	ud->last = NULL;
-	ud->buflen = 0;
-	pthread_mutex_unlock(&(ud->mutex));
-}
-
-PaDeviceIndex dev;
 			
-int stream(int fd, struct params prm, int verbose)
-{
-    PaStream *stream;
+void audio_thread(struct params * prm)
+{	
+	PaStream *stream;
 	PaError err;
+	
+	PaStreamParameters ioparam;
+	ioparam.device = dev;
+	ioparam.channelCount = prm->channels;
+	ioparam.sampleFormat = prm->sampleFormat;
+	ioparam.suggestedLatency = Pa_GetDeviceInfo(dev)->defaultLowOutputLatency;
+	ioparam.hostApiSpecificStreamInfo = NULL;
 
+	pthread_mutex_lock(&queue_mutex);
+	reset_queue_pointer = 1;
+	pthread_mutex_unlock(&queue_mutex);	
+	
 	struct udata ud;
-	ud.fd = fd;
-	ud.still_running = 1;
-	ud.prm = &prm;
+	ud.prm = prm;
 	ud.verbose = verbose;
-	ud.first = NULL;
-	ud.last = NULL;
-	ud.buflen = 0;
-	switch (prm.sampleFormat) {
+	switch (prm->sampleFormat) {
 		case paInt8:
 			ud.bpFrame = 1;
 			break;
@@ -238,114 +239,164 @@ int stream(int fd, struct params prm, int verbose)
 			break;
 	}
 	
-	pthread_t network;
-	pthread_mutex_init(&(ud.mutex),NULL);
-	pthread_create( &network, NULL, (void * (*)(void *))network_thread, (void*) &ud);
-	
-	PaStreamParameters ioparam;
-	ioparam.device = dev;
-	ioparam.channelCount = prm.channels;
-	ioparam.sampleFormat = prm.sampleFormat;
-	ioparam.suggestedLatency = Pa_GetDeviceInfo(dev)->defaultLowOutputLatency;
-	ioparam.hostApiSpecificStreamInfo = NULL;
-	
 	err = Pa_OpenStream(&stream,
 						NULL,
 						&ioparam,
-						prm.sampleRate,
-						prm.framesPerBuffer,
+						prm->sampleRate,
+						prm->framesPerBuffer,
 						0,
 						get_data,
 						&ud );
-    if ( err!=paNoError)
+    if (err!=paNoError)
     {
-        fprintf(stderr,"Can't open stream: %s\n",Pa_GetErrorText( err ));
-		ud.still_running = 0;
-		pthread_join( network, NULL);
-		pthread_mutex_destroy(&(ud.mutex));
-        return 1;
+        fprintf(stderr,"Can't open stream: %s\n",Pa_GetErrorText(err));
+        return;
     }
-    err = Pa_StartStream( stream );
-    if( err != paNoError)
+    err = Pa_StartStream(stream);
+    if(err != paNoError)
     {
-        fprintf(stderr,"Can't start stream: %s\n",Pa_GetErrorText( err ));
-        Pa_CloseStream( stream );
-		ud.still_running = 0;
-		pthread_join( network, NULL);
-		pthread_mutex_destroy(&(ud.mutex));
-        return 1;
+        fprintf(stderr,"Can't start stream: %s\n",Pa_GetErrorText(err));
+        Pa_CloseStream(stream);
+        return;
     }
-    while (ud.still_running)
-        Pa_Sleep(60);
-    err = Pa_CloseStream( stream );
-	pthread_join( network, NULL);
-	pthread_mutex_destroy(&(ud.mutex));
-    return 0;
-}
 
-int nrthreads = 0;
-int verbose = 0;
-
-int read_header(int fd, struct params * prm)
-{
-	uint8_t header[HEADER_SIZE];
-	read_data(fd,header,1);
-	if (header[0]!=DSRA_SIG)
-		return 1;
-	read_data(fd,header+1,HEADER_SIZE-1);
-	prm->channels = header[1];
-	const char * format;
-	switch (header[2]) {
-		case DSRA_INT8:
-			prm->sampleFormat = paInt8;
+	const char * format = "unknown";
+	switch (prm->sampleFormat) {
+		case paInt8:
 			format = "8";
 			break;
-		case DSRA_INT16:
-			prm->sampleFormat = paInt16;
+		case paInt16:
 			format = "16";
 			break;
-		case DSRA_INT24:
-			prm->sampleFormat = paInt24;
+		case paInt24:
 			format = "24";
 			break;
-		case DSRA_INT32:
-			prm->sampleFormat = paInt32;
+		case paInt32:
 			format = "32";
 			break;
-		case DSRA_FLOAT32:
-			prm->sampleFormat = paFloat32;
-			format = "float";
+		case paFloat32:
+			format = "float32";
 			break;
-		default:
-			fprintf(stderr,"Invalid bit depth\n");
-			return 1;
 	}
-	prm->sampleRate = ntohl(*(uint32_t*)(header+3));
-	prm->framesPerBuffer = ntohl(*(uint32_t*)(header+7));
-	
-	
+	fprintf(stderr,"Opened audio stream\n");
 	fprintf(stderr,"Number of channels: %d\n",prm->channels);
 	fprintf(stderr,"Bit depth: %s\n",format);
 	fprintf(stderr,"Sample rate: %.0fHz\n",prm->sampleRate);
 	fprintf(stderr,"Buffer size: %lu frames\n",prm->framesPerBuffer);
 	
+    while (1)
+	{
+		pthread_mutex_lock(&keep_going_mutex);
+		int sr = keep_going;
+		pthread_mutex_unlock(&keep_going_mutex);
+		if (!sr)
+			break;
+        Pa_Sleep(60);
+	}
+    Pa_CloseStream(stream);
+	fprintf(stderr,"Closed audio stream due to inactivity\n");
+}
+
+int params_equal(const struct params * prm1, const struct params * prm2)
+{
+	if (!prm1 || !prm2) return 0;
+	return (memcmp(prm1,prm2,sizeof(struct params)) == 0);
+}
+
+int audio_started = 0;
+pthread_t audio;
+struct params * audio_params = NULL;
+void stop_audio()
+{
+	if (audio_started)
+	{
+		audio_started = 0;
+		pthread_mutex_lock(&keep_going_mutex);
+		keep_going = 0;
+		pthread_mutex_unlock(&keep_going_mutex);
+		pthread_join(audio,NULL);
+		free(audio_params);
+		audio_params = NULL;
+	}
+}
+
+void start_audio(const struct params * prm)
+{
+	gettimeofday(&last_data_packet_time,NULL);
+	if (audio_started && audio_params && prm && (memcmp(audio_params,prm,sizeof(struct params))==0))
+		return;
+	if (audio_started)
+		stop_audio();
+	audio_started = 1;
+	
+ 	audio_params = malloc(sizeof(struct params));
+	memcpy(audio_params,prm,sizeof(struct params));
+	
+	pthread_mutex_lock(&keep_going_mutex);
+	keep_going = 1;
+	pthread_mutex_unlock(&keep_going_mutex);
+	pthread_create(&audio,NULL,(void * (*)(void*))audio_thread,(void*)audio_params);
+}
+
+int read_header(const uint8_t * header, size_t sz, struct params * prm)
+{
+	if (sz<HEADER_SIZE) 
+		return 1;
+	if (header[0]!=DSRA_SIG)
+		return 1;
+	memset(prm,0,sizeof(struct params));
+	prm->channels = header[1];
+	switch (header[2]) {
+		case DSRA_INT8:
+			prm->sampleFormat = paInt8;
+			break;
+		case DSRA_INT16:
+			prm->sampleFormat = paInt16;
+			break;
+		case DSRA_INT24:
+			prm->sampleFormat = paInt24;
+			break;
+		case DSRA_INT32:
+			prm->sampleFormat = paInt32;
+			break;
+		case DSRA_FLOAT32:
+			prm->sampleFormat = paFloat32;
+			break;
+		default:
+			return 1;
+	}
+	prm->sampleRate = ntohl(*(uint32_t*)(header+3));
+	prm->framesPerBuffer = ntohl(*(uint32_t*)(header+7));
+	
 	return 0;
 }
 
-void audio_thread(int * i)
+int parse_data(uint8_t * buffer, size_t size)
 {
-	int fd = *i;
-	free(i);
-    fprintf(stdout,"New client\n");
-	
-	struct params prm;
-	if (read_header(fd,&prm)!=0)
+	static struct params prm;
+	static int prm_valid = 0;
+	if (!size) return 1;
+	if (buffer[0] == DSRA_SIG)
 	{
-		fprintf(stderr,"Invalid header format\n");
-	} else 
-		stream(fd,prm,verbose);
-    fprintf(stdout,"Client disconnected\n");
-	nrthreads--;
+		if ((prm_valid = (read_header(buffer,size,&prm) == 0)))
+			start_audio(&prm);
+		return 1;
+	}
+	if (buffer[0] == DSRA_SIG_DATA)
+	{
+		if (!audio_started)
+			return 1;
+		return queue_data(buffer,size);
+	}
+	return 1;
+}
+
+int timedout(const struct timeval * ts, long long timeout)
+{
+	struct timeval ct;
+	gettimeofday(&ct,NULL);
+	long long interval = ((long long)(ct.tv_sec-ts->tv_sec))*1000000 + (((long long)ct.tv_usec)-((long long)(ts->tv_usec)));
+	return (interval > timeout);
 }
 
 int start_listening(const char * port)
@@ -360,10 +411,15 @@ int start_listening(const char * port)
 	
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
-    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_socktype = SOCK_DGRAM;
     hints.ai_flags = AI_PASSIVE;     // fill in my IP for me
 	
-    getaddrinfo(NULL, port, &hints, &res);
+	int r;
+    if ((r = getaddrinfo(NULL, port, &hints, &res))!=0)
+	{
+		fprintf(stderr,"getaddrinfo: %s",gai_strerror(r));
+		return -1;
+	}
 	
 	for (p=res; p; p=p->ai_next)
 	{
@@ -385,12 +441,6 @@ int start_listening(const char * port)
 			continue;
 		}
 		
-		if (listen(sockfd, 1)<0)
-		{
-			close(sockfd);
-			continue;
-		}
-		
 		socks[nsocks++]=sockfd;
 		if (nsocks==100)
 			break;
@@ -402,51 +452,61 @@ int start_listening(const char * port)
 		return -1;
 	}
 	
-	while (1)
+	pthread_mutex_init(&keep_going_mutex,NULL);
+	pthread_mutex_init(&queue_mutex,NULL);
+
+	int asocks = nsocks;
+	while (asocks && keep_going_global)
 	{
 		fd_set fds;
 		int max=0;
+		FD_ZERO(&fds);
 		for (i=0; i<nsocks; i++)
 		{
-			FD_ZERO(&fds);
+			if (socks[i]<0) continue;
 			FD_SET(socks[i],&fds);
 			if (socks[i]+1>max)
 				max=socks[i]+1;
 		}
-		if ((select(max,&fds,NULL,NULL,NULL)<0)&&(errno!=EINTR))
+		struct timeval timeout;
+		timeout.tv_sec = 1;
+		timeout.tv_usec = 0;
+		if ((select(max,&fds,NULL,NULL,&timeout)<0)&&(errno!=EINTR))
 		{
-			fprintf(stderr,"select() failed: %s\n",gai_strerror(errno));
+			fprintf(stderr,"select(): %s\n",strerror(errno));
 			for (i=0; i<nsocks; i++)
 				close(socks[i]);
 			return -1;
 		}
 		for (i=0; i<nsocks; i++)
 		{
+			if (socks[i]<0) continue;
 			if (FD_ISSET(socks[i],&fds))
 			{
 				struct sockaddr_storage their_addr;
 				socklen_t addr_size = sizeof their_addr;
-				if (nrthreads) 
+				
+				uint8_t * buffer = malloc(MAX_BUFFER_SIZE);
+				ssize_t ret = recvfrom(socks[i],buffer,MAX_BUFFER_SIZE,0,(struct sockaddr *)&their_addr,&addr_size);
+				if (ret == -1)
 				{
-					fprintf(stderr, "Can only accept one connection at a time\n");
-					close(accept(socks[i], (struct sockaddr *)&their_addr, &addr_size));
-					continue;
-				}
-				nrthreads++;
-				int * fdp = (int*)malloc(sizeof(int));
-				*fdp = accept(socks[i], (struct sockaddr *)&their_addr, &addr_size);
-				if (*fdp<0)
-				{
-					fprintf(stderr,"accept() failed : %s\n",gai_strerror(errno));
+					fprintf(stderr,"recvfrom(): %s\n",strerror(errno));
+					close(socks[i]);
+					socks[i] = -1;
+					asocks--;
 				} else {
-					pthread_t thread;
-					pthread_create( &thread, NULL, (void * (*)(void *))audio_thread, (void*) fdp);
+					if (parse_data(buffer,(size_t)ret))
+						free(buffer);
 				}
 			}
 		}
+		if (timedout(&last_data_packet_time,1000000))
+			stop_audio();
 	}
 	for (i=0; i<nsocks; i++)
-		close(socks[i]);
+		if (socks[i]>=0)
+			close(socks[i]);
+	stop_audio();
     return 0;
 }
 

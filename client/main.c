@@ -12,26 +12,34 @@
 #include <unistd.h>
 #include "../common/dsra.h"
 
+struct udata
+{
+	volatile int still_running;
+	int bpFrame;
+	int fd;
+	int verbose;
+	struct params * prm;
+};
+
 int write_data(int fd, uint8_t * buf, size_t size)
 {
-	while (size)
+	while (1)
 	{
 		int err = write(fd,buf,size);
 		if ((err==-1)&&(errno!=EAGAIN)&&(errno!=EINTR))
+		{
+			fprintf(stderr,"write(): %s\n",strerror(errno));
 			return -1;
+		}
 		if (err == (int)size)
 			return 0;
 		if (err==0)
 			return -1;
-		if (err>0)
-		{
-			size-=err;
-			buf+=err;
-		}
 	}
 	return 0;
 }
 
+void send_header(const struct params * prm, int fd);
 static int get_data( const void *inputBuffer, void *outputBuffer,
                            unsigned long framesPerBuffer,
                            const PaStreamCallbackTimeInfo* timeInfo,
@@ -59,13 +67,26 @@ static int get_data( const void *inputBuffer, void *outputBuffer,
             empty = 0;
         }
     } else  eframes = 0;
+	static unsigned int count = 0;
+	int bufferspersecond = (ud->prm->sampleRate)/framesPerBuffer;
 	
 	if (!empty)
-		if (write_data(ud->fd,(uint8_t*)inputBuffer,size)!=0)
+	{
+		uint8_t * buffer = (uint8_t*)malloc(size+2);
+		buffer[0] = DSRA_SIG_DATA;
+		buffer[1] = (uint8_t)count;
+		memcpy(buffer+2,inputBuffer,size);
+		if (write_data(ud->fd,buffer,size+2)!=0)
 		{
+			free(buffer);
 			ud->still_running = 0;
 			return paComplete;
 		}
+		free(buffer);
+		count++;
+		if ((count % bufferspersecond) == 0)
+			send_header(ud->prm,ud->fd);
+	}
     return 0;
 }
 
@@ -78,22 +99,22 @@ int init_network(const char * host, const char * port)
 	
     memset(&hints,0,sizeof(hints));
     hints.ai_family=AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_socktype = SOCK_DGRAM;
     if ((stat=getaddrinfo(host,port,&hints,&res)))
     {
-        printf("getaddrinfo failed: %s\n",gai_strerror(stat));
+        fprintf(stderr,"getaddrinfo failed: %s\n",gai_strerror(stat));
         return -1;
     }
     sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (sockfd==-1)
     {
-        printf("Socket opening failed: %s\n",gai_strerror(errno));
+        fprintf(stderr,"Socket opening failed: %s\n",strerror(errno));
         return -1;
     }
     resu=connect(sockfd,res->ai_addr,res->ai_addrlen);
     if (resu==-1)
     {
-        printf("Connecting failed: %s\n",gai_strerror(errno));
+        fprintf(stderr,"Connecting failed: %s\n",strerror(errno));
         return -1;
     }
     return sockfd;
@@ -169,15 +190,12 @@ PaDeviceIndex device_for_string(const char * dev)
 
 PaDeviceIndex dev;
 
-int play_stream(int fd, struct params prm)
+void send_header(const struct params * prm, int fd)
 {
-	PaStream *stream;
-	PaError err;
-	
 	uint8_t header[HEADER_SIZE];
 	header[0] = DSRA_SIG;
-	header[1] = (uint8_t)(prm.channels);
-	switch (prm.sampleFormat) {
+	header[1] = (uint8_t)(prm->channels);
+	switch (prm->sampleFormat) {
 		case paInt8:
 			header[2] = DSRA_INT8;
 			break;
@@ -197,10 +215,17 @@ int play_stream(int fd, struct params prm)
 			header[2] = 0;
 			break;
 	}	
-	*(uint32_t*)(header+3) = htonl((uint32_t)(prm.sampleRate));
-	*(uint32_t*)(header+7) = htonl((uint32_t)(prm.framesPerBuffer));
+	*(uint32_t*)(header+3) = htonl((uint32_t)(prm->sampleRate));
+	*(uint32_t*)(header+7) = htonl((uint32_t)(prm->framesPerBuffer));
 	write_data(fd,header,HEADER_SIZE);
+}
+
+int play_stream(int fd, struct params prm)
+{
+	PaStream *stream;
+	PaError err;
 	
+	send_header(&prm, fd);
 	
 	struct udata ud;
 	ud.fd = fd;
