@@ -116,7 +116,8 @@ int queue_data(uint8_t * buffer, size_t size)
 	gettimeofday(&last_data_packet_time,NULL);
 	uint8_t timestamp = buffer[1];
 	pthread_mutex_lock(&queue_mutex);
-	if (reset_queue_pointer || timestamp>=queue_pointer)
+	
+	if (reset_queue_pointer || ((timestamp-queue_pointer)<127))
 	{
 		if (queue_buffers[timestamp])
 			free(queue_buffers[timestamp]);
@@ -180,12 +181,13 @@ PaDeviceIndex device_for_string(const char * dev)
 				break;
 			}
 		}
+		size_t n = sizeof(dev);
 		if ((nr<0)||(nr>=n))
 		{
 			for (nr=0; nr<n; nr++)
 			{
 				const PaDeviceInfo * info = Pa_GetDeviceInfo(nr);
-				if ((info->maxOutputChannels)&&(strcmp(info->name,dev)==0))
+				if ((info->maxOutputChannels)&&(strncmp(info->name,dev,n)==0))
 					break;
 			}
 			if (nr>=n) return -1;

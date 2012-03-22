@@ -1,0 +1,10 @@
+.libs
+*.la
+*.lo
+*.o
+/portaudio/bin-stamp
+/portaudio/lib-stamp
+/portaudio/bin
+/server/dsra-server
+/client/dsra
+/portaudio/config.log

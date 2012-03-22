@@ -169,12 +169,13 @@ PaDeviceIndex device_for_string(const char * dev)
 				break;
 			}
 		}
+		size_t n = sizeof(dev);
 		if ((nr<0)||(nr>=n))
 		{
 			for (nr=0; nr<n; nr++)
 			{
 				const PaDeviceInfo * info = Pa_GetDeviceInfo(nr);
-				if ((info->maxInputChannels)&&(strcmp(info->name,dev)==0))
+				if ((info->maxInputChannels)&&(strncmp(info->name,dev,n)==0))
 					break;
 			}
 			if (nr>=n) return -1;
