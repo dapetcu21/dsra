@@ -77,7 +77,10 @@ static int get_data( const void *inputBuffer, void *outputBuffer,
 	if (size<sz)
 		sz = size;
 	if (buffer)
+	{
 		memcpy(outputBuffer,buffer+2,sz);
+		free(buffer);
+	}
 	else 
 	{
 		memset(outputBuffer,0,size);
@@ -112,6 +115,7 @@ static int get_data( const void *inputBuffer, void *outputBuffer,
 
 int queue_data(uint8_t * buffer, size_t size)
 {
+	if (size<=2) return 1;
 	if (buffer[0] != DSRA_SIG_DATA) return 1;
 	gettimeofday(&last_data_packet_time,NULL);
 	uint8_t timestamp = buffer[1];
@@ -122,7 +126,7 @@ int queue_data(uint8_t * buffer, size_t size)
 		if (queue_buffers[timestamp])
 			free(queue_buffers[timestamp]);
 		queue_buffers[timestamp] = buffer;
-		queue_sizes[timestamp] = size;
+		queue_sizes[timestamp] = size-2;
 		queue_last_added = timestamp;
 		pthread_mutex_unlock(&queue_mutex);
 		return 0;
@@ -494,6 +498,7 @@ int start_listening(const char * port)
 				{
 					fprintf(stderr,"recvfrom(): %s\n",strerror(errno));
 					close(socks[i]);
+					free(buffer);
 					socks[i] = -1;
 					asocks--;
 				} else {
