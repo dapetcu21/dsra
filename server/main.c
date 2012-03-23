@@ -21,10 +21,9 @@
 
 struct params prm;
 int verbose = 0;
-int keep_going = 0;
-int keep_going_global = 1;
+volatile int keep_going = 0;
 PaDeviceIndex dev;
-pthread_mutex_t keep_going_mutex,queue_mutex;
+pthread_mutex_t queue_mutex;
 uint8_t queue_pointer,queue_last_added;
 int reset_queue_pointer;
 uint8_t * queue_buffers[256] = {};
@@ -37,6 +36,9 @@ struct udata
 	int verbose;
 	struct params * prm;
 };
+
+uint8_t memory[256][MAX_BUFFER_SIZE];
+uint8_t memory_pointer = 0;
 
 static int get_data( const void *inputBuffer, void *outputBuffer,
 						  unsigned long framesPerBuffer,
@@ -77,10 +79,7 @@ static int get_data( const void *inputBuffer, void *outputBuffer,
 	if (size<sz)
 		sz = size;
 	if (buffer)
-	{
 		memcpy(outputBuffer,buffer+2,sz);
-		free(buffer);
-	}
 	else 
 	{
 		memset(outputBuffer,0,size);
@@ -123,8 +122,6 @@ int queue_data(uint8_t * buffer, size_t size)
 	
 	if (reset_queue_pointer || ((timestamp-queue_pointer)<127))
 	{
-		if (queue_buffers[timestamp])
-			free(queue_buffers[timestamp]);
 		queue_buffers[timestamp] = buffer;
 		queue_sizes[timestamp] = size-2;
 		queue_last_added = timestamp;
@@ -290,15 +287,9 @@ void audio_thread(struct params * prm)
 	fprintf(stderr,"Sample rate: %.0fHz\n",prm->sampleRate);
 	fprintf(stderr,"Buffer size: %lu frames\n",prm->framesPerBuffer);
 	
-    while (1)
-	{
-		pthread_mutex_lock(&keep_going_mutex);
-		int sr = keep_going;
-		pthread_mutex_unlock(&keep_going_mutex);
-		if (!sr)
-			break;
+    while (keep_going)
         Pa_Sleep(60);
-	}
+
     Pa_CloseStream(stream);
 	fprintf(stderr,"Closed audio stream due to inactivity\n");
 }
@@ -317,9 +308,7 @@ void stop_audio()
 	if (audio_started)
 	{
 		audio_started = 0;
-		pthread_mutex_lock(&keep_going_mutex);
 		keep_going = 0;
-		pthread_mutex_unlock(&keep_going_mutex);
 		pthread_join(audio,NULL);
 		free(audio_params);
 		audio_params = NULL;
@@ -338,9 +327,7 @@ void start_audio(const struct params * prm)
  	audio_params = malloc(sizeof(struct params));
 	memcpy(audio_params,prm,sizeof(struct params));
 	
-	pthread_mutex_lock(&keep_going_mutex);
 	keep_going = 1;
-	pthread_mutex_unlock(&keep_going_mutex);
 	pthread_create(&audio,NULL,(void * (*)(void*))audio_thread,(void*)audio_params);
 }
 
@@ -458,11 +445,10 @@ int start_listening(const char * port)
 		return -1;
 	}
 	
-	pthread_mutex_init(&keep_going_mutex,NULL);
 	pthread_mutex_init(&queue_mutex,NULL);
 
 	int asocks = nsocks;
-	while (asocks && keep_going_global)
+	while (asocks)
 	{
 		fd_set fds;
 		int max=0;
@@ -492,18 +478,17 @@ int start_listening(const char * port)
 				struct sockaddr_storage their_addr;
 				socklen_t addr_size = sizeof their_addr;
 				
-				uint8_t * buffer = malloc(MAX_BUFFER_SIZE);
+				uint8_t * buffer = memory[memory_pointer];
 				ssize_t ret = recvfrom(socks[i],buffer,MAX_BUFFER_SIZE,0,(struct sockaddr *)&their_addr,&addr_size);
 				if (ret == -1)
 				{
 					fprintf(stderr,"recvfrom(): %s\n",strerror(errno));
 					close(socks[i]);
-					free(buffer);
 					socks[i] = -1;
 					asocks--;
 				} else {
-					if (parse_data(buffer,(size_t)ret))
-						free(buffer);
+					if (!parse_data(buffer,(size_t)ret))
+						memory_pointer++;
 				}
 			}
 		}

@@ -1,4 +1,5 @@
 .libs
+.DS_Store
 *.la
 *.lo
 *.o
