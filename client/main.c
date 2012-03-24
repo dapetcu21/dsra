@@ -18,7 +18,6 @@ struct udata
 	int bpFrame;
 	int fd;
 	int verbose;
-	uint8_t * buffer;
 	struct params * prm;
 };
 
@@ -73,15 +72,17 @@ static int get_data( const void *inputBuffer, void *outputBuffer,
 	
 	if (!empty)
 	{
-		uint8_t * buffer = ud->buffer;
+		uint8_t * buffer = (uint8_t*)malloc(size+2);
 		buffer[0] = DSRA_SIG_DATA;
 		buffer[1] = (uint8_t)count;
 		memcpy(buffer+2,inputBuffer,size);
 		if (write_data(ud->fd,buffer,size+2)!=0)
 		{
+			free(buffer);
 			ud->still_running = 0;
 			return paComplete;
 		}
+		free(buffer);
 		count++;
 		if ((count % bufferspersecond) == 0)
 			send_header(ud->prm,ud->fd);
@@ -251,8 +252,7 @@ int play_stream(int fd, struct params prm)
 		default:
 			ud.bpFrame = 1;
 			break;
-	}
-	ud.buffer = (uint8_t*)malloc(prm.framesPerBuffer * ud.bpFrame * prm.channels + 2);
+	}	
 	
     PaStreamParameters ioparam;
 	ioparam.device = dev;
@@ -285,7 +285,6 @@ int play_stream(int fd, struct params prm)
         Pa_Sleep(60);
     err = Pa_StopStream( stream );
     err = Pa_CloseStream( stream );
-	free(ud.buffer);
 	return 0;
 }
 
