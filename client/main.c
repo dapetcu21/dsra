@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include "../common/dsra.h"
+#include <pthread.h>
 
 struct udata
 {
@@ -227,6 +228,8 @@ int play_stream(int fd, struct params prm)
 	PaError err;
 	
 	send_header(&prm, fd);
+	
+	raise_thread_priority();
 	
 	struct udata ud;
 	ud.fd = fd;

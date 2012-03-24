@@ -12,6 +12,16 @@ struct params
 	unsigned long framesPerBuffer;
 };
 
+inline void raise_thread_priority()
+{
+	int ret;
+	struct sched_param param;
+	param.sched_priority = sched_get_priority_max(SCHED_OTHER);
+	ret = pthread_setschedparam(pthread_self(), SCHED_OTHER, &param);
+	if (ret!=0)
+		fprintf(stderr,"Can't raise thread priority: %s\n",strerror(errno));
+}
+
 #define HEADER_SIZE 11
 #define DSRA_SIG 0x12
 #define DSRA_SIG_DATA 0x11

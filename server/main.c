@@ -215,6 +215,8 @@ void audio_thread(struct params * prm)
 	ioparam.suggestedLatency = Pa_GetDeviceInfo(dev)->defaultLowOutputLatency;
 	ioparam.hostApiSpecificStreamInfo = NULL;
 
+	raise_thread_priority();
+	
 	pthread_mutex_lock(&queue_mutex);
 	reset_queue_pointer = 1;
 	pthread_mutex_unlock(&queue_mutex);	
@@ -444,7 +446,8 @@ int start_listening(const char * port)
 		fprintf(stderr,"no valid interfaces to listen on found\n");
 		return -1;
 	}
-	
+
+	raise_thread_priority();
 	pthread_mutex_init(&queue_mutex,NULL);
 
 	int asocks = nsocks;
